@@ -1,0 +1,29 @@
+{
+  "locations": [
+    {
+      "name": "Plaza de Bolívar",
+      "latitude": "4.598056",
+      "longitude": "-74.076111"
+    },
+    {
+      "name": "Parque de la 93",
+      "latitude": "4.676389",
+      "longitude": "-74.048333"
+    },
+    {
+      "name": "Monserrate",
+      "latitude": "4.605556",
+      "longitude": "-74.056389"
+    },
+    {
+      "name": "Aeropuerto El Dorado",
+      "latitude": "4.702222",
+      "longitude": "-74.146944"
+    },
+    {
+      "name": "Museo del Oro",
+      "latitude": "4.601389",
+      "longitude": "-74.072222"
+    }
+  ]
+}
