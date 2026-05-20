@@ -1,12 +1,14 @@
 package com.example.taller3_movil.screens
 
 import android.Manifest
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
@@ -15,17 +17,42 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 
+@SuppressLint("MissingPermission")
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun LocationPermissionScreen(navController: NavController) {
+    val context = LocalContext.current
     val permissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
 
     if (permissionState.status.isGranted) {
+        // ── Permiso concedido: capturar GPS one-shot y escribir coordenadas en DB ─
         LaunchedEffect(Unit) {
-            navController.navigate(Screens.Map.name) {
-                popUpTo(Screens.Permission.name) { inclusive = true }
-            }
+            val fusedClient = LocationServices.getFusedLocationProviderClient(context)
+            fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                .addOnCompleteListener { task ->
+                    val loc = task.result
+                    if (loc != null) {
+                        val uid = FirebaseAuth.getInstance().currentUser?.uid
+                        if (uid != null) {
+                            FirebaseDatabase.getInstance().reference
+                                .child("users").child(uid)
+                                .updateChildren(
+                                    mapOf(
+                                        "latitud" to loc.latitude,
+                                        "longitud" to loc.longitude
+                                    )
+                                )
+                        }
+                    }
+                    navController.navigate(Screens.Map.name) {
+                        popUpTo(Screens.Permission.name) { inclusive = true }
+                    }
+                }
         }
     } else {
         Column(

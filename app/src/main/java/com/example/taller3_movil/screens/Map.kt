@@ -1,7 +1,12 @@
 package com.example.taller3_movil.screens
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Looper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -9,11 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.taller3_movil.Screens
+import com.example.taller3_movil.model.MapViewModel
 import com.example.taller3_movil.model.PuntoInteres
 import com.example.taller3_movil.model.loadPuntosInteres
+import com.example.taller3_movil.showUserAvailableNotification
 import com.google.android.gms.location.*
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.firebase.auth.FirebaseAuth
@@ -28,15 +38,44 @@ fun MapScreen(navController: NavController) {
 
 @SuppressLint("MissingPermission")
 @Composable
-fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) {
+fun GoogleMapsHome(
+    navController: NavController,
+    locations: List<PuntoInteres>,
+    mapViewModel: MapViewModel = viewModel()
+) {
     val context = LocalContext.current
     val bogota = LatLng(4.627293, -74.063228)
     var disponible by remember { mutableStateOf(false) }
 
-    // ── 1. Estado de la ubicación actual ──────────────────────────────────────
+    // ── 1. Launcher para solicitar POST_NOTIFICATIONS (Android 13+) ───────────
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* La notificación simplemente no se muestra si el usuario deniega */ }
+
+    // ── 2. Al entrar: inicializar usuario en Firebase y pedir permiso si falta ─
+    LaunchedEffect(Unit) {
+        mapViewModel.initUserInDatabase()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    // ── 3. Colectar eventos del SharedFlow y disparar notificación local ───────
+    LaunchedEffect(mapViewModel) {
+        mapViewModel.notificationEvents.collect { nombre ->
+            showUserAvailableNotification(context, nombre)
+        }
+    }
+
+    // ── 4. Estado de la ubicación actual ──────────────────────────────────────
     var ubicacionActual by remember { mutableStateOf(bogota) }
 
-    // ── 2. Cliente y configuración del GPS ───────────────────────────────────
+    // ── 5. Cliente y configuración del GPS ───────────────────────────────────
     val fusedLocationClient = remember {
         LocationServices.getFusedLocationProviderClient(context)
     }
@@ -48,18 +87,19 @@ fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) 
             .build()
     }
 
-    // ── 3. Callback que actualiza el estado ──────────────────────────────────
+    // ── 6. Callback: actualiza estado local Y Firebase ────────────────────────
     val locationCallback = remember {
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { loc ->
                     ubicacionActual = LatLng(loc.latitude, loc.longitude)
+                    mapViewModel.updateLocation(loc.latitude, loc.longitude)
                 }
             }
         }
     }
 
-    // ── 4. DisposableEffect: arrancar y detener updates con el ciclo de vida ─
+    // ── 7. DisposableEffect: arrancar y detener GPS con el ciclo de vida ──────
     DisposableEffect(Unit) {
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
@@ -71,7 +111,7 @@ fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) 
         }
     }
 
-    // ── 5. Cámara y ajustes del mapa ─────────────────────────────────────────
+    // ── 8. Cámara y ajustes del mapa ─────────────────────────────────────────
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(bogota, 15f)
     }
@@ -83,9 +123,7 @@ fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) 
         )
     }
 
-    // ── 6. Marcador dinámico — equivalente a rememberUpdatedMarkerState ───────
-    // rememberUpdatedMarkerState no existe en maps-compose 4.x; este patrón
-    // tiene el mismo comportamiento: el pin se mueve cada vez que cambia ubicacionActual.
+    // ── 9. Marcador dinámico de posición propia ───────────────────────────────
     val myLocationState = rememberMarkerState(position = ubicacionActual)
     LaunchedEffect(ubicacionActual) {
         myLocationState.position = ubicacionActual
@@ -99,7 +137,6 @@ fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) 
             cameraPositionState = cameraPositionState,
             uiSettings = uiSettings
         ) {
-            // Marcadores estáticos del JSON
             locations.forEach { location ->
                 Marker(
                     state = rememberMarkerState(position = LatLng(location.lat, location.long)),
@@ -108,11 +145,11 @@ fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) 
                 )
             }
 
-            // ── Marcador dinámico (posición del usuario) ──────────────────
             Marker(
                 state = myLocationState,
                 title = "Mi ubicación",
-                snippet = "Posición actual"
+                snippet = "Posición actual",
+                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
             )
         }
 
@@ -126,12 +163,24 @@ fun GoogleMapsHome(navController: NavController, locations: List<PuntoInteres>) 
         ) {
             FilterChip(
                 selected = disponible,
-                onClick = { disponible = !disponible },
+                onClick = {
+                    val nuevo = !disponible
+                    disponible = nuevo
+                    mapViewModel.setDisponible(nuevo)
+                },
                 label = { Text(if (disponible) "Disponible" else "No disponible") }
             )
 
             ElevatedButton(
+                onClick = { navController.navigate(Screens.Users.name) },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("Usuarios")
+            }
+
+            ElevatedButton(
                 onClick = {
+                    mapViewModel.setDisponible(false)
                     FirebaseAuth.getInstance().signOut()
                     navController.navigate(Screens.Login.name) {
                         popUpTo(Screens.Map.name) { inclusive = true }

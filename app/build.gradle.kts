@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.gms.play.services.maps)
     implementation(libs.play.services.location)
     implementation(libs.accompanist.permissions)
+    implementation(libs.coil.compose)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

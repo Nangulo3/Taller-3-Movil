@@ -33,5 +33,9 @@ fun Navigation() {
         composable(route = Screens.Users.name) {
             UsersScreen(navController)
         }
+        composable(route = "tracking/{userId}") { backStackEntry ->
+            val userId = backStackEntry.arguments?.getString("userId") ?: ""
+            TrackingMapScreen(navController = navController, userId = userId)
+        }
     }
 }

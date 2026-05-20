@@ -1,6 +1,9 @@
 package com.example.taller3_movil.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,11 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
 import com.example.taller3_movil.Screens
 import com.example.taller3_movil.model.AuthViewModel
 
@@ -28,6 +33,11 @@ fun RegisterScreen(
 ) {
     val context = LocalContext.current
     val uiState by authViewModel.registerState.collectAsState()
+
+    // ── Selector de imagen desde galería ─────────────────────────────────────
+    val imageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri -> uri?.let { authViewModel.onRegisterImageChange(it) } }
 
     Column(
         modifier = Modifier
@@ -46,15 +56,33 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // ── Foto de perfil: imagen seleccionada o placeholder ─────────────────
         Box(
             modifier = Modifier
                 .size(100.dp)
                 .clip(CircleShape)
                 .background(Color.LightGray)
-                .clickable { /* Abrir selector de imagen */ },
+                .clickable {
+                    imageLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
             contentAlignment = Alignment.Center
         ) {
-            Text("Foto")
+            if (uiState.imageUri != null) {
+                AsyncImage(
+                    model = uiState.imageUri,
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = "Foto",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.DarkGray
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
