@@ -9,14 +9,21 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MapViewModel : ViewModel() {
 
     private val db = FirebaseDatabase.getInstance().reference
     private val auth = FirebaseAuth.getInstance()
+
+    // ── Estado de disponibilidad propio sincronizado con Firebase ────────────
+    private val _disponible = MutableStateFlow(false)
+    val disponible: StateFlow<Boolean> = _disponible.asStateFlow()
 
     // ── Evento de notificación: emite el nombre del usuario que pasó a disponible ─
     private val _notificationEvents = MutableSharedFlow<String>()
@@ -95,9 +102,19 @@ class MapViewModel : ViewModel() {
         }
     }
 
-    fun setDisponible(disponible: Boolean) {
+    fun loadDisponible() {
         val uid = auth.currentUser?.uid ?: return
-        db.child("users").child(uid).child("disponible").setValue(disponible)
+        db.child("users").child(uid).child("disponible")
+            .get()
+            .addOnSuccessListener { snapshot ->
+                _disponible.value = snapshot.getValue(Boolean::class.java) ?: false
+            }
+    }
+
+    fun setDisponible(value: Boolean) {
+        _disponible.value = value
+        val uid = auth.currentUser?.uid ?: return
+        db.child("users").child(uid).child("disponible").setValue(value)
     }
 
     fun updateLocation(lat: Double, lng: Double) {

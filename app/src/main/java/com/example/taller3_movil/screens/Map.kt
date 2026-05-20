@@ -45,16 +45,18 @@ fun GoogleMapsHome(
 ) {
     val context = LocalContext.current
     val bogota = LatLng(4.627293, -74.063228)
-    var disponible by remember { mutableStateOf(false) }
+    // ── disponible sincronizado con Firebase (persiste entre sesiones) ───────
+    val disponible by mapViewModel.disponible.collectAsState()
 
     // ── 1. Launcher para solicitar POST_NOTIFICATIONS (Android 13+) ───────────
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { /* La notificación simplemente no se muestra si el usuario deniega */ }
 
-    // ── 2. Al entrar: inicializar usuario en Firebase y pedir permiso si falta ─
+    // ── 2. Al entrar: inicializar usuario en Firebase y cargar disponible ─────
     LaunchedEffect(Unit) {
         mapViewModel.initUserInDatabase()
+        mapViewModel.loadDisponible()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
@@ -163,11 +165,7 @@ fun GoogleMapsHome(
         ) {
             FilterChip(
                 selected = disponible,
-                onClick = {
-                    val nuevo = !disponible
-                    disponible = nuevo
-                    mapViewModel.setDisponible(nuevo)
-                },
+                onClick = { mapViewModel.setDisponible(!disponible) },
                 label = { Text(if (disponible) "Disponible" else "No disponible") }
             )
 
