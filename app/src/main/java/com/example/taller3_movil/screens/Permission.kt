@@ -18,7 +18,6 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 
@@ -30,29 +29,29 @@ fun LocationPermissionScreen(navController: NavController) {
     val permissionState = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
 
     if (permissionState.status.isGranted) {
-        // ── Permiso concedido: capturar GPS one-shot y escribir coordenadas en DB ─
+        // ── Permiso concedido: lastLocation es instantáneo (caché), nunca bloquea ─
         LaunchedEffect(Unit) {
             val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-            fusedClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
-                .addOnCompleteListener { task ->
-                    val loc = task.result
-                    if (loc != null) {
-                        val uid = FirebaseAuth.getInstance().currentUser?.uid
-                        if (uid != null) {
-                            FirebaseDatabase.getInstance().reference
-                                .child("users").child(uid)
-                                .updateChildren(
-                                    mapOf(
-                                        "latitud" to loc.latitude,
-                                        "longitud" to loc.longitude
-                                    )
+            fusedClient.lastLocation.addOnCompleteListener { task ->
+                val loc = task.result
+                if (loc != null) {
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid
+                    if (uid != null) {
+                        FirebaseDatabase.getInstance().reference
+                            .child("users").child(uid)
+                            .updateChildren(
+                                mapOf(
+                                    "latitud" to loc.latitude,
+                                    "longitud" to loc.longitude
                                 )
-                        }
-                    }
-                    navController.navigate(Screens.Map.name) {
-                        popUpTo(Screens.Permission.name) { inclusive = true }
+                            )
                     }
                 }
+                // Navega siempre, con o sin ubicación — el mapa la obtiene en tiempo real
+                navController.navigate(Screens.Map.name) {
+                    popUpTo(Screens.Permission.name) { inclusive = true }
+                }
+            }
         }
     } else {
         Column(
